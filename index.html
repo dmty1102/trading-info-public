@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>交易信息空间公开版</title>
+<style>
+:root {
+color-scheme: light;
+--bg: #eef0f3;
+--surface: #ffffff;
+--surface2: #f4f6f8;
+--text: #14181d;
+--dim: #66707d;
+--border: #dde2e8;
+--up: #d92d20;
+--down: #12805c;
+--warn: #b97e0c;
+--warn-bg: #fdf3d7;
+--live: #12805c;
+--accent: #d92d20;
+--flash-up: rgba(217, 45, 32, 0.14);
+--flash-down: rgba(18, 128, 92, 0.14);
+--radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+:root {
+color-scheme: dark;
+--bg: #0b0e13;
+--surface: #12161d;
+--surface2: #171c25;
+--text: #e8ecf1;
+--dim: #8b94a3;
+--border: #232a35;
+--up: #f0564f;
+--down: #3fb97f;
+--warn: #f5b544;
+--warn-bg: rgba(245, 181, 68, 0.12);
+--live: #3dd68c;
+--accent: #f0564f;
+--flash-up: rgba(240, 86, 79, 0.22);
+--flash-down: rgba(63, 185, 127, 0.22);
+}
+}
+* { box-sizing: border-box;}
+html, body { overflow-x: hidden;}
+body {
+margin: 0;
+background: var(--bg);
+color: var(--text);
+font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+"Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+-webkit-font-smoothing: antialiased;
+}
+.num {
+font-family: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+font-variant-numeric: tabular-nums;
+letter-spacing: -0.01em;
+}
+button, select, input { min-height: 2.25rem; font: inherit;}
+a { color: inherit; text-decoration: none;}
+.sr-only {
+position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- header / tabs ---------- */
+header {
+position: sticky; top: 0; z-index: 20;
+background: var(--bg);
+border-bottom: 1px solid var(--border);
+padding-top: env(safe-area-inset-top, 0px);
+}
+nav.tabs {
+max-width: 64rem; margin: 0 auto; padding: 0 0.75rem;
+display: flex; align-items: stretch; gap: 0.25rem;
+}
+.tab-btn {
+position: relative; border: 0; background: transparent; cursor: pointer;
+padding: 0.65rem 0.75rem; font-size: 15px; font-weight: 500; color: var(--dim);
+min-height: 2.75rem;
+}
+.tab-btn[aria-current="page"] { font-weight: 700; color: var(--text);}
+.tab-btn[aria-current="page"]::after {
+content: ""; position: absolute; left: 0.75rem; right: 0.75rem; bottom: 0;
+height: 2px; border-radius: 999px; background: var(--accent);
+}
+main { max-width: 64rem; margin: 0 auto; padding: 0 0.75rem;}
+.page { padding-bottom: 2rem;}
+[hidden] { display: none!important;}
+
+/* ---------- shared bits ---------- */
+.status-line { font-size: 12px; color: var(--dim); padding: 0.5rem 0; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;}
+.lamp { display: inline-block; width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0;}
+@keyframes lamppulse { 0%, 100% { opacity: 1;} 50% { opacity: 0.45;}}
+.lamp.live { animation: lamppulse 1.6s ease-in-out infinite;}
+.section-title { font-size: 13px; font-weight: 600; color: var(--dim); margin: 0;}
+.empty-note { padding: 2rem 0; text-align: center; font-size: 14px; color: var(--dim);}
+.footnote { margin-top: 1rem; font-size: 11px; line-height: 1.6; color: var(--dim);}
+@keyframes tickflash { 0% { background-color: var(--flash-color, transparent);} 100% { background-color: transparent;}}
+.flash-layer { pointer-events: none; position: absolute; inset: 0;}
+@media (prefers-reduced-motion: reduce) {
+.lamp.live { animation: none;}
+.flash-layer { animation: none!important;}
+}
+
+/* ---------- tiles ---------- */
+.grid-indices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;}
+@media (min-width: 640px) {.grid-indices { grid-template-columns: repeat(4, 1fr);}}
+.grid-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 0.5rem;}
+@media (min-width: 640px) {.grid-tiles { grid-template-columns: repeat(4, 1fr);}}
+@media (min-width: 1024px) {.grid-tiles { grid-template-columns: repeat(5, 1fr);}}
+.grid-cn { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;}
+@media (min-width: 1024px) {.grid-cn { grid-template-columns: repeat(9, 1fr);}}
+.tile {
+position: relative; min-width: 0; overflow: hidden;
+border: 1px solid var(--border); border-radius: var(--radius);
+background: var(--surface); padding: 0.5rem;
+}
+.tile.t-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.tile.t-chg { font-size: 11px; font-weight: 500; flex-shrink: 0;}
+.tile.t-price { margin-top: 0.125rem; font-weight: 700; line-height: 1.25; white-space: nowrap;}
+.ps-1 { font-size: 21px;}.ps-2 { font-size: 19px;}.ps-3 { font-size: 16px;}
+.ps-4 { font-size: 14px;}.ps-5 { font-size: 12px;}
+.tile.t-sub { margin-top: 0.25rem; display: flex; align-items: center; justify-content: space-between; gap: 0.25rem; font-size: 10px; line-height: 1.3;}
+.funding-extreme { font-weight: 600; border-radius: 4px; padding: 0 2px; color: var(--warn); background: var(--warn-bg);}
+.idx-tile { padding: 0.5rem 0.625rem;}
+.idx-tile.i-name { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.idx-tile.i-price { margin-top: 0.125rem; font-size: 17px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.idx-tile.i-chg { font-size: 11px; font-weight: 500;}
+.hk-badge {
+position: absolute; right: 0; top: 0; border-bottom-left-radius: 6px;
+padding: 0 4px; font-size: 9px; font-weight: 700; line-height: 14px;
+color: #fff; background: var(--accent);
+}
+.cn-tile.i-price { font-size: 15px;}
+.cn-tile.t-sub2 { margin-top: 0.125rem; display: flex; align-items: baseline; justify-content: space-between; gap: 0.25rem; font-size: 10px; line-height: 1.3;}
+
+/* ---------- controls ---------- */
+.controls { margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem;}
+.controls select,.controls input {
+height: 2.25rem; border: 1px solid var(--border); border-radius: 8px;
+background: var(--surface); color: var(--text); font-size: 13px; padding: 0 0.5rem;
+}
+.controls select { flex-shrink: 0;}
+.controls input { flex: 1; min-width: 0;}
+.controls input::placeholder { color: var(--dim);}
+
+/* ---------- news ---------- */
+.breaking-box {
+margin-top: 0.25rem; border: 1px solid var(--up); border-radius: var(--radius);
+background: var(--surface); padding: 0 0.75rem;
+}
+.breaking-box h2 { padding-top: 0.625rem; margin: 0; font-size: 13px; font-weight: 700; color: var(--up);}
+.news-row { display: block; padding: 0.75rem 0; border-bottom: 1px solid var(--border);}
+.news-row:last-child { border-bottom: 0;}
+.news-title { font-size: 15px; font-weight: 600; line-height: 1.45;}
+.news-summary {
+margin: 0.25rem 0 0; font-size: 13px; line-height: 1.6; color: var(--dim);
+display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.news-meta { margin-top: 0.375rem; display: flex; align-items: center; gap: 0.5rem; font-size: 11px; color: var(--dim);}
+.src-chip { border-radius: 4px; background: var(--surface2); padding: 2px 6px; font-weight: 500;}
+
+/* ---------- domestic rank / flash ---------- */
+.rank-head,.rank-row {
+display: flex; align-items: center; gap: 0.5rem;
+border-bottom: 1px solid var(--border);
+}
+.rank-head { padding-bottom: 0.25rem; font-size: 10px; color: var(--dim);}
+.rank-row { padding: 0.5rem 0;}
+.rank-row:last-child { border-bottom: 0;}
+.rk-no { width: 24px; flex-shrink: 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--dim);}
+.rk-name { flex: 1; min-width: 0;}
+.rk-name.n { display: block; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.rk-name.c { display: block; font-size: 10px; line-height: 1.3; color: var(--dim);}
+.rk-price { width: 74px; flex-shrink: 0; text-align: right; font-size: 14px; font-weight: 600;}
+.rk-chg { width: 64px; flex-shrink: 0; text-align: right; font-size: 13px; font-weight: 500;}
+.rk-amt { width: 76px; flex-shrink: 0; text-align: right; font-size: 13px;}
+.flash-row { display: flex; gap: 0.625rem; padding: 0.625rem 0; border-bottom: 1px solid var(--border);}
+.flash-row:last-child { border-bottom: 0;}
+.flash-time { width: 44px; flex-shrink: 0; padding-top: 2px; font-size: 11px; font-weight: 500; color: var(--dim);}
+.flash-body { flex: 1; min-width: 0;}
+.flash-title { display: block; font-size: 14px; font-weight: 500; line-height: 1.5;}
+.flash-digest {
+margin-top: 0.125rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+overflow: hidden; font-size: 12px; line-height: 1.6; color: var(--dim);
+}
+.row-between { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;}
+.data-time { font-size: 11px; color: var(--dim); white-space: nowrap;}
+</style>
+</head>
+<body>
+<header>
+<nav class="tabs" aria-label="页面切换">
+<button type="button" class="tab-btn" data-tab="home" aria-current="page" aria-label="切换到首页">首页</button>
+<button type="button" class="tab-btn" data-tab="news" aria-label="切换到最新资讯">最新资讯</button>
+<button type="button" class="tab-btn" data-tab="domestic" aria-label="切换到国内">国内</button>
+</nav>
+</header>
+
+<main>
+<!-- ================= 首页 ================= -->
+<div class="page" id="page-home">
+<div class="status-line" role="status" id="home-status">
+<span class="lamp" id="conn-lamp" style="background: var(--dim)" aria-hidden="true"></span>
+<span id="conn-label" style="font-weight: 500">连接中</span>
+<span class="num" id="snapshot-time">· 快照 —</span>
+</div>
+
+<section aria-label="美股指数">
+<div class="grid-indices" id="us-indices"></div>
+</section>
+
+<div class="controls">
+<label class="sr-only" for="sort-select">排序方式</label>
+<select id="sort-select" aria-label="排序方式">
+<option value="volume">成交额</option>
+<option value="gainers">涨幅</option>
+<option value="losers">跌幅</option>
+<option value="funding">费率极值</option>
+</select>
+<label class="sr-only" for="filter-input">按币种筛选</label>
+<input id="filter-input" aria-label="按币种筛选" placeholder="筛选币种，如 BTC" autocomplete="off" />
+</div>
+
+<section aria-label="币圈永续" style="margin-top: 1rem">
+<h2 class="section-title">币圈永续 · 24h 成交额前 30</h2>
+<div id="crypto-grid"><p class="empty-note">正在加载行情…</p></div>
+</section>
+
+<section aria-label="美股永续" style="margin-top: 1.25rem">
+<h2 class="section-title">美股永续 · 7×24 交易</h2>
+<div id="stock-grid"><p class="empty-note">正在加载…</p></div>
+</section>
+
+<p class="footnote">
+行情来源：Gate.io USDT 永续（浏览器直连 WebSocket 实时推送，断线自动改用 REST 轮询）；美股指数来自
+Yahoo Finance。价格颜色：涨红跌绿；资金费率绝对值超过 0.05% 时标黄。
+</p>
+</div>
+
+<!-- ================= 最新资讯 ================= -->
+<div class="page" id="page-news" hidden>
+<div class="status-line" role="status">
+<span id="news-status">正在读取彭博、路透、美联社、CNBC、BBC、Google News 的公开 RSS…</span>
+</div>
+<div id="news-body"><p class="empty-note">资讯加载中…</p></div>
+<p class="footnote">
+资讯来源：彭博、路透社、美联社、CNBC、BBC、Google News 的公开 RSS，浏览器直接读取原文标题与摘要，不做翻译；每
+5 分钟自动刷新。点标题在新窗口打开原文。
+</p>
+</div>
+
+<!-- ================= 国内 ================= -->
+<div class="page" id="page-domestic" hidden>
+<section aria-label="A股与港股指数" style="padding-top: 0.75rem">
+<div class="grid-cn" id="cn-indices"></div>
+<p class="status-line" role="status" id="cn-asof">指数连接中…</p>
+</section>
+
+<section aria-label="沪深两市成交额榜" style="margin-top: 1rem">
+<div class="row-between">
+<h2 class="section-title">沪深两市 · 成交额前 30</h2>
+<span class="data-time" id="rank-time"></span>
+</div>
+<div id="rank-body"><p class="empty-note">榜单数据接入中，稍候自动显示…</p></div>
+</section>
+
+<section aria-label="国内财经快讯" style="margin-top: 1.25rem">
+<div class="row-between">
+<h2 class="section-title">财经快讯</h2>
+<span class="data-time" id="flash-time"></span>
+</div>
+<div id="flash-body"><p class="empty-note">快讯接入中，稍候自动显示…</p></div>
+</section>
+
+<p class="footnote">
+数据来源：腾讯财经（指数，浏览器直连）、新浪财经（成交额榜）、东方财富 / 金十数据（快讯），全部公开免费接口，自动刷新。红涨绿跌为
+A股习惯；休市或接口异常时显示最近一次成功数据并标注数据时间。
+</p>
+</div>
+</main>
+
+<script>
+"use strict";
+/* ================= 通用工具 ================= */
+var $ = function (id) { return document.getElementById(id);};
+function esc(s) {
+return String(s == null? "": s)
+.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function clockTime(ts) {
+if (!ts) return "—";
+var d = new Date(ts);
+function p(n) { return String(n).padStart(2, "0");}
+return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+function relTime(ts) {
+var diff = Date.now() - ts;
+if (diff < 60 * 1000) return "刚刚";
+if (diff < 3600 * 1000) return Math.floor(diff / 60000) + "分钟前";
+if (diff < 24 * 3600 * 1000) return Math.floor(diff / 3600000) + "小时前";
+var d = new Date(ts);
+function p(n) { return String(n).padStart(2, "0");}
+return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function fmtChange(pct) { return (pct > 0? "+": "") + pct.toFixed(2) + "%";}
+function fmtFunding(rate) {
+var pct = rate * 100;
+return (pct > 0? "+": "") + pct.toFixed(4) + "%";
+}
+function fmtVolume(v) {
+if (!v || v <= 0) return "—";
+return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2}).format(v);
+}
+function fmtPrice2(p) {
+return p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function priceClass(price) {
+var len = String(price).length;
+if (len <= 6) return "ps-1";
+if (len <= 8) return "ps-2";
+if (len <= 10) return "ps-3";
+if (len <= 12) return "ps-4";
+return "ps-5";
+}
+function stripTags(html) {
+var div = document.createElement("div");
+div.innerHTML = String(html || "");
+return (div.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+/* 带超时的 fetch；proxied=true 时依次尝试公开跨域通道（用于本身不开放跨域的公开接口） */
+function fetchWithTimeout(url, ms, asText) {
+var ctrl = new AbortController();
+var t = setTimeout(function () { ctrl.abort();}, ms);
+return fetch(url, { signal: ctrl.signal, cache: "no-store"})
+.then(function (r) {
+clearTimeout(t);
+if (!r.ok) throw new Error("HTTP " + r.status);
+return asText? r.text(): r.arrayBuffer();
+})
+.catch(function (e) { clearTimeout(t); throw e;});
+}
+function proxiedText(url, ms) {
+var attempts = [
+url,
+"https://corsproxy.io/?url=" + encodeURIComponent(url),
+"https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+"https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url)
+];
+var chain = Promise.reject(new Error("start"));
+attempts.forEach(function (u) {
+chain = chain.catch(function () { return fetchWithTimeout(u, ms || 12000, true);});
+});
+return chain;
+}
+
+/* ================= 页签 ================= */
+var started = { home: false, news: false, domestic: false};
+function switchTab(name) {
+var btns = document.querySelectorAll(".tab-btn");
+btns.forEach(function (b) {
+if (b.getAttribute("data-tab") === name) b.setAttribute("aria-current", "page");
+else b.removeAttribute("aria-current");
+});
+["home", "news", "domestic"].forEach(function (k) {
+$("page-" + k).hidden = k!== name;
+});
+if (!started[name]) {
+started[name] = true;
+if (name === "news") startNews();
+if (name === "domestic") startDomestic();
+}
+window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tab-btn").forEach(function (b) {
+b.addEventListener("click", function () { switchTab(b.getAttribute("data-tab"));});
+});
+
+/* ================= 首页：Gate 行情 ================= */
+var STOCK_SYMBOLS = ["NVDA","TSLA","AAPL","MSFT","AMZN","META","GOOGL","AMD","NFLX","AVGO","COIN","MSTR","PLTR","HOOD","CRCL","SPY","SPYM","QQQ"];
+var STOCK_CONTRACTS = STOCK_SYMBOLS.map(function (s) { return s + "_USDT";});
+var marketState = {
+tickers: [], // 前30（按成交额）
+stocks: [], // 18 美股永续
+fetchedAt: 0,
+sort: "volume",
+filter: "",
+flashes: new Map(),
+prevPrices: new Map()
+};
+var connState = "connecting"; // connecting | live | polling
+
+function setConn(state) {
+connState = state;
+var lamp = $("conn-lamp"), label = $("conn-label");
+if (state === "live") {
+lamp.style.background = "var(--live)"; lamp.classList.add("live");
+label.textContent = "直播中"; label.style.color = "var(--live)";
+} else if (state === "polling") {
+lamp.style.background = "var(--warn)"; lamp.classList.remove("live");
+label.textContent = "轮询中"; label.style.color = "var(--warn)";
+} else {
+lamp.style.background = "var(--dim)"; lamp.classList.remove("live");
+label.textContent = "连接中"; label.style.color = "var(--dim)";
+}
+}
+
+function tileHTML(t) {
+var up = t.changePct >= 0;
+var color = up? "var(--up)": "var(--down)";
+var extreme = Math.abs(t.fundingRate) > 0.0005;
+var flash = marketState.flashes.get(t.contract);
+var flashHTML = flash
+? '<div class="flash-layer" key="' + flash.n + '" style="--flash-color:' +
+(flash.dir === "up"? "var(--flash-up)": "var(--flash-down)") +
+';animation:tickflash.65s ease-out"></div>'
+: "";
+return '<div class="tile">' + flashHTML +
+'<div style="position:relative;display:flex;align-items:baseline;justify-content:space-between;gap:4px">' +
+'<span class="t-name">' + esc(t.base) + '</span>' +
+'<span class="num t-chg" style="color:' + color + '">' + fmtChange(t.changePct) + '</span>' +
+'</div>' +
+'<div class="num t-price ' + priceClass(t.last) + '" style="color:' + color + '">' + esc(t.last) + '</div>' +
+'<div class="t-sub" style="position:relative">' +
+'<span class="num' + (extreme? " funding-extreme": "") + '" title="资金费率"' +
+(extreme? "": ' style="color:var(--dim)"') + '>费率 ' + fmtFunding(t.fundingRate) + '</span>' +
+'<span class="num" style="color:var(--dim)">' + fmtVolume(t.volumeQuote) + '</span>' +
+'</div></div>';
+}
+
+function sortTickers(list) {
+var arr = list.slice();
+switch (marketState.sort) {
+case "gainers": return arr.sort(function (a, b) { return b.changePct - a.changePct;});
+case "losers": return arr.sort(function (a, b) { return a.changePct - b.changePct;});
+case "funding": return arr.sort(function (a, b) { return Math.abs(b.fundingRate) - Math.abs(a.fundingRate);});
+default: return arr.sort(function (a, b) { return b.volumeQuote - a.volumeQuote;});
+}
+}
+
+function renderMarket() {
+var q = marketState.filter.trim().toUpperCase();
+function vis(list) {
+var l = q? list.filter(function (t) { return t.base.indexOf(q)!== -1;}): list;
+return sortTickers(l);
+}
+var crypto = vis(marketState.tickers);
+var stocks = vis(marketState.stocks);
+$("crypto-grid").innerHTML = crypto.length
+? '<div class="grid-tiles">' + crypto.map(tileHTML).join("") + "</div>"
+: '<p class="empty-note">' + (marketState.fetchedAt
+? (q? "没有匹配「" + esc(marketState.filter) + "」的合约": "暂无行情数据")
+: "正在加载行情…") + "</p>";
+$("stock-grid").innerHTML = stocks.length
+? '<div class="grid-tiles">' + stocks.map(tileHTML).join("") + "</div>"
+: '<p class="empty-note">' + (marketState.fetchedAt
+? (q? "没有匹配「" + esc(marketState.filter) + "」的美股永续": "暂无美股永续数据")
+: "正在加载…") + "</p>";
+$("snapshot-time").textContent = "· 快照 " + clockTime(marketState.fetchedAt);
+}
+
+function applyTickerRow(row, byContract) {
+var t = byContract.get(row.contract);
+if (!t) return;
+var lastNum = Number(row.last);
+if (row.last) {
+var old = marketState.prevPrices.get(row.contract);
+if (old!= null && isFinite(lastNum) && lastNum!== old) {
+var cur = marketState.flashes.get(row.contract);
+marketState.flashes.set(row.contract, { dir: lastNum > old? "up": "down", n: (cur? cur.n: 0) + 1});
+}
+if (isFinite(lastNum)) marketState.prevPrices.set(row.contract, lastNum);
+t.last = String(row.last);
+}
+if (row.change_percentage!= null) t.changePct = Number(row.change_percentage) || 0;
+if (row.funding_rate!= null) t.fundingRate = Number(row.funding_rate) || 0;
+var v = Number(row.volume_24h_quote);
+if (isFinite(v) && v > 0) t.volumeQuote = v;
+}
+
+function loadGateRest() {
+return fetchWithTimeout("https://api.gateio.ws/api/v4/futures/usdt/tickers", 12000, true)
+.then(function (text) {
+var rows = JSON.parse(text);
+if (!Array.isArray(rows)) throw new Error("bad data");
+var all = rows.map(function (r) {
+return {
+contract: r.contract,
+base: String(r.contract || "").replace(/_USDT$/, ""),
+last: String(r.last || ""),
+changePct: Number(r.change_percentage) || 0,
+fundingRate: Number(r.funding_rate) || 0,
+volumeQuote: Number(r.volume_24h_quote) || 0
+};
+}).filter(function (t) { return t.contract && t.last;});
+var byVol = all.slice().sort(function (a, b) { return b.volumeQuote - a.volumeQuote;});
+if (!marketState.fetchedAt) {
+marketState.tickers = byVol.slice(0, 30);
+var map = new Map(all.map(function (t) { return [t.contract, t];}));
+marketState.stocks = STOCK_CONTRACTS.map(function (c) { return map.get(c);}).filter(Boolean);
+} else {
+// 轮询时就地更新已有合约的价格，并按最新成交额重排前30
+var byContract = new Map();
+marketState.tickers.concat(marketState.stocks).forEach(function (t) { byContract.set(t.contract, t);});
+rows.forEach(function (r) { applyTickerRow(r, byContract);});
+marketState.tickers = byVol.slice(0, 30).map(function (fresh) {
+return byContract.get(fresh.contract) || fresh;
+});
+}
+marketState.fetchedAt = Date.now();
+renderMarket();
+return all;
+});
+}
+
+/* WebSocket 直播 */
+function startGateWS(contracts) {
+var ws = null, closed = false, attempts = 0, retryTimer = null, pingTimer = null;
+function scheduleRetry() {
+if (closed) return;
+var delay = Math.min(30000, 1000 * Math.pow(2, Math.min(attempts, 5)));
+retryTimer = setTimeout(connect, delay);
+}
+function connect() {
+if (closed) return;
+try { ws = new WebSocket("wss://fx-ws.gateio.ws/v4/ws/usdt");}
+catch (e) { scheduleRetry(); return;}
+ws.onopen = function () {
+attempts = 0;
+setConn("live");
+ws.send(JSON.stringify({
+time: Math.floor(Date.now() / 1000),
+channel: "futures.tickers", event: "subscribe", payload: contracts
+}));
+pingTimer = setInterval(function () {
+if (ws && ws.readyState === WebSocket.OPEN) {
+ws.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), channel: "futures.ping"}));
+}
+}, 20000);
+};
+ws.onmessage = function (ev) {
+try {
+var msg = JSON.parse(String(ev.data));
+if (msg.channel!== "futures.tickers" ||!Array.isArray(msg.result)) return;
+var byContract = new Map();
+marketState.tickers.concat(marketState.stocks).forEach(function (t) { byContract.set(t.contract, t);});
+msg.result.forEach(function (r) { applyTickerRow(r, byContract);});
+renderMarket();
+} catch (e) { /* 忽略坏帧 */}
+};
+ws.onerror = function () { try { ws.close();} catch (e) {}};
+ws.onclose = function () {
+if (pingTimer) clearInterval(pingTimer);
+if (closed) return;
+attempts++;
+setConn("polling");
+scheduleRetry();
+};
+}
+connect();
+// 轮询兜底：非直播状态时每 8 秒拉一次 REST
+setInterval(function () {
+if (connState!== "live") loadGateRest().catch(function () {});
+}, 8000);
+}
+
+/* 美股四指数（Yahoo Finance，经公开跨域通道） */
+var US_INDICES = [
+{ symbol: "^DJI", name: "道琼斯"},
+{ symbol: "^IXIC", name: "纳斯达克"},
+{ symbol: "^NDX", name: "纳斯达克100"},
+{ symbol: "^GSPC", name: "标普500"}
+];
+function renderIndices(data) {
+$("us-indices").innerHTML = US_INDICES.map(function (def) {
+var d = data[def.symbol];
+if (!d) {
+return '<div class="tile idx-tile"><div class="i-name">' + def.name + '</div>' +
+'<div class="num i-price" style="color:var(--dim)">—</div>' +
+'<div class="num i-chg" style="color:var(--dim)">—</div></div>';
+}
+var color = d.changePct >= 0? "var(--up)": "var(--down)";
+return '<div class="tile idx-tile"><div class="i-name">' + def.name + '</div>' +
+'<div class="num i-price">' + fmtPrice2(d.price) + '</div>' +
+'<div class="num i-chg" style="color:' + color + '">' + fmtChange(d.changePct) + '</div></div>';
+}).join("");
+}
+function loadIndices() {
+var data = {};
+var jobs = US_INDICES.map(function (def) {
+var url = "https://query1.finance.yahoo.com/v8/finance/chart/" +
+encodeURIComponent(def.symbol) + "?interval=1m&range=1d";
+return proxiedText(url, 12000).then(function (text) {
+var json = JSON.parse(text);
+var meta = json && json.chart && json.chart.result && json.chart.result[0] && json.chart.result[0].meta;
+if (!meta ||!isFinite(meta.regularMarketPrice)) return;
+var pct = meta.regularMarketChangePercent;
+if (!isFinite(pct) && isFinite(meta.chartPreviousClose) && meta.chartPreviousClose) {
+pct = (meta.regularMarketPrice / meta.chartPreviousClose - 1) * 100;
+}
+data[def.symbol] = { price: meta.regularMarketPrice, changePct: isFinite(pct)? pct: 0};
+}).catch(function () {});
+});
+return Promise.all(jobs).then(function () { renderIndices(data);});
+}
+
+$("sort-select").addEventListener("change", function (e) {
+marketState.sort = e.target.value;
+renderMarket();
+});
+$("filter-input").addEventListener("input", function (e) {
+marketState.filter = e.target.value;
+renderMarket();
+});
+
+renderIndices({});
+loadIndices();
+setInterval(loadIndices, 60000);
+loadGateRest()
+.then(function () {
+var contracts = marketState.tickers.concat(marketState.stocks).map(function (t) { return t.contract;});
+startGateWS(contracts.length? contracts: STOCK_CONTRACTS);
+})
+.catch(function () {
+setConn("polling");
+startGateWS(STOCK_CONTRACTS);
+});
+
+/* ================= 最新资讯：公开 RSS 直读 ================= */
+var RSS_FEEDS = [
+{ label: "彭博", url: "https://feeds.bloomberg.com/markets/news.rss"},
+{ label: "路透社", url: "https://news.google.com/rss/search?q=site%3Areuters.com&hl=en-US&gl=US&ceid=US:en", stripSuffix: " - Reuters"},
+{ label: "美联社", url: "https://news.google.com/rss/search?q=site%3Aapnews.com&hl=en-US&gl=US&ceid=US:en", stripSuffix: null},
+{ label: "CNBC", url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"},
+{ label: "BBC", url: "https://feeds.bbci.co.uk/news/world/rss.xml"},
+{ label: "BBC", url: "https://feeds.bbci.co.uk/news/business/rss.xml"},
+{ label: "Google News", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"},
+{ label: "Google News", url: "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"}
+];
+var BREAKING_WORDS = ["war", "missile", "airstrike", "air strike", "invasion", "earthquake", "tsunami",
+"explosion", "attack", "plane crash", "ceasefire", "tariff", "sanction", "rate hike", "rate cut",
+"central bank", "default", "bankrupt", "战争", "导弹", "空袭", "地震", "海啸", "爆炸", "袭击",
+"坠机", "关税", "制裁", "央行", "熔断", "崩盘", "停火"];
+var newsLoadedAt = 0;
+
+function parseFeed(xmlText, feed) {
+var doc = new DOMParser().parseFromString(xmlText, "text/xml");
+if (doc.querySelector("parsererror")) return [];
+var nodes = doc.querySelectorAll("item, entry");
+var out = [];
+nodes.forEach(function (node) {
+function txt(sel) {
+var el = node.querySelector(sel);
+return el? (el.textContent || "").trim(): "";
+}
+var title = txt("title");
+var link = txt("link");
+if (!link) {
+var linkEl = node.querySelector("link[href]");
+if (linkEl) link = linkEl.getAttribute("href") || "";
+}
+var dateStr = txt("pubDate") || txt("published") || txt("updated") || txt("date");
+var ts = dateStr? Date.parse(dateStr): NaN;
+if (!title ||!link ||!isFinite(ts)) return;
+if (feed.stripSuffix && title.slice(-feed.stripSuffix.length) === feed.stripSuffix) {
+title = title.slice(0, -feed.stripSuffix.length).trim();
+}
+if (feed.label === "美联社") {
+title = title.replace(/ - (AP News|The Associated Press|Associated Press)$/, "").trim();
+}
+var summary = stripTags(txt("description") || txt("summary"));
+if (summary && (summary.indexOf(title) === 0 || title.indexOf(summary) === 0)) summary = "";
+if (summary.length > 220) summary = summary.slice(0, 220) + "…";
+out.push({ title: title, url: link, ts: ts, source: feed.label, summary: summary});
+});
+return out;
+}
+
+function isBreaking(item) {
+var hay = (item.title + " " + item.summary).toLowerCase();
+return BREAKING_WORDS.some(function (w) { return hay.indexOf(w)!== -1;});
+}
+
+function newsRowHTML(item) {
+return '<a class="news-row" href="' + esc(item.url) + '" target="_blank" rel="noreferrer" ' +
+'aria-label="' + esc(item.title) + "（" + esc(item.source) + "，在新窗口打开原文）" + '">' +
+'<div class="news-title">' + esc(item.title) + "</div>" +
+(item.summary? '<p class="news-summary">' + esc(item.summary) + "</p>": "") +
+'<div class="news-meta"><span class="src-chip">' + esc(item.source) + "</span>" +
+"<span>" + relTime(item.ts) + "</span><span aria-hidden=\"true\">原文 ↗</span></div></a>";
+}
+
+function loadNews() {
+var jobs = RSS_FEEDS.map(function (feed) {
+return proxiedText(feed.url, 15000)
+.then(function (text) { return parseFeed(text, feed);})
+.catch(function () { return [];});
+});
+return Promise.all(jobs).then(function (results) {
+var seen = new Map();
+results.forEach(function (list) {
+list.forEach(function (item) {
+var key = item.title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ").trim();
+var prev = seen.get(key);
+if (!prev || (item.summary &&!prev.summary)) seen.set(key, item);
+});
+});
+var items = Array.from(seen.values()).sort(function (a, b) { return b.ts - a.ts;}).slice(0, 120);
+if (!items.length) {
+if (!newsLoadedAt) {
+$("news-body").innerHTML = '<p class="empty-note">暂时没有读到资讯，稍后会自动重试。</p>';
+}
+return;
+}
+newsLoadedAt = Date.now();
+var breaking = items.filter(isBreaking).slice(0, 8);
+var breakingSet = new Set(breaking);
+var regular = items.filter(function (i) { return!breakingSet.has(i);});
+var html = "";
+if (breaking.length) {
+html += '<section class="breaking-box" aria-label="重大新闻"><h2>⚡ 重大</h2>' +
+breaking.map(newsRowHTML).join("") + "</section>";
+}
+html += '<section aria-label="最新资讯列表" style="padding:0 2px">' +
+regular.map(newsRowHTML).join("") + "</section>";
+$("news-body").innerHTML = html;
+$("news-status").textContent = "共 " + items.length + " 条 · 更新于 " + clockTime(newsLoadedAt) + " · 每 5 分钟自动刷新";
+});
+}
+function startNews() {
+loadNews();
+setInterval(loadNews, 5 * 60 * 1000);
+}
+
+/* ================= 国内 ================= */
+var CN_INDICES = [
+{ symbol: "s_sh000001", name: "上证指数", hk: false},
+{ symbol: "s_sz399001", name: "深证成指", hk: false},
+{ symbol: "s_sz399006", name: "创业板指", hk: false},
+{ symbol: "s_sh000300", name: "沪深300", hk: false},
+{ symbol: "s_sh000688", name: "科创50", hk: false},
+{ symbol: "s_bj899050", name: "北证50", hk: false},
+{ symbol: "s_hkHSI", name: "恒生指数", hk: true},
+{ symbol: "s_hkHSTECH", name: "恒生科技指数", hk: true},
+{ symbol: "s_hkHSCEI", name: "国企指数", hk: true}
+];
+var cnQuotes = new Map();
+var cnAsOf = 0;
+
+function fmtSigned(v, digits) {
+return (v > 0? "+": "") + v.toFixed(digits == null? 2: digits);
+}
+function renderCnIndices() {
+$("cn-indices").innerHTML = CN_INDICES.map(function (def) {
+var q = cnQuotes.get(def.symbol);
+var color = q? (q.changePct >= 0? "var(--up)": "var(--down)"): "var(--dim)";
+return '<div class="tile idx-tile cn-tile">' +
+(def.hk? '<span class="hk-badge" aria-hidden="true">港</span>': "") +
+'<div class="i-name" style="padding-right:12px">' + def.name +
+(def.hk? '<span class="sr-only">（港股）</span>': "") + "</div>" +
+'<div class="num i-price" style="color:' + color + '">' + (q? fmtPrice2(q.price): "—") + "</div>" +
+'<div class="num cn-tile t-sub2" style="color:' + color + '">' +
+"<span>" + (q? fmtSigned(q.changePct) + "%": "—") + "</span>" +
+"<span>" + (q? fmtSigned(q.change): "") + "</span></div></div>";
+}).join("");
+$("cn-asof").innerHTML = cnAsOf
+? '指数数据时间 <span class="num">' + clockTime(cnAsOf) + "</span> · 每 3 秒自动更新（腾讯财经）"
+: "指数连接中…";
+}
+
+function loadTencent() {
+var script = document.createElement("script");
+script.charset = "gbk";
+script.src = "https://qt.gtimg.cn/q=" + CN_INDICES.map(function (d) { return d.symbol;}).join(",") + "&_=" + Date.now();
+script.onload = function () {
+script.remove();
+var next = new Map();
+CN_INDICES.forEach(function (def) {
+var raw = window["v_" + def.symbol];
+if (typeof raw!== "string") return;
+var f = raw.split("~");
+var price = Number(f[3]), change = Number(f[4]), changePct = Number(f[5]);
+if (!isFinite(price) || price <= 0) return;
+next.set(def.symbol, {
+price: price,
+change: isFinite(change)? change: 0,
+changePct: isFinite(changePct)? changePct: 0
+});
+});
+if (next.size) { cnQuotes = next; cnAsOf = Date.now(); renderCnIndices();}
+setTimeout(loadTencent, 3000);
+};
+script.onerror = function () { script.remove(); setTimeout(loadTencent, 3000);};
+document.head.appendChild(script);
+}
+
+var rankFetchedAt = 0;
+function loadRank() {
+var url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=30&sort=amount&asc=0&node=hs_a&symbol=&_s_r_a=page";
+var attempts = [
+"https://corsproxy.io/?url=" + encodeURIComponent(url),
+"https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+"https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url),
+url
+];
+var chain = Promise.reject(new Error("start"));
+attempts.forEach(function (u) {
+chain = chain.catch(function () { return fetchWithTimeout(u, 12000, false);});
+});
+return chain.then(function (buf) {
+var text = new TextDecoder("gbk").decode(buf);
+var rows = JSON.parse(text);
+if (!Array.isArray(rows) ||!rows.length) throw new Error("empty");
+rankFetchedAt = Date.now();
+$("rank-time").innerHTML = '数据时间 <span class="num">' + clockTime(rankFetchedAt) + "</span>";
+var head = '<div class="rank-head" aria-hidden="true"><span class="rk-no">名次</span>' +
+'<span class="rk-name">名称 / 代码</span><span class="rk-price">现价</span>' +
+'<span class="rk-chg">涨跌幅</span><span class="rk-amt">成交额(亿)</span></div>';
+$("rank-body").innerHTML = head + rows.slice(0, 30).map(function (r, i) {
+var pct = Number(r.changepercent) || 0;
+var color = pct >= 0? "var(--up)": "var(--down)";
+var amountYi = (Number(r.amount) || 0) / 1e8;
+return '<div class="rank-row"><span class="num rk-no">' + (i + 1) + "</span>" +
+'<span class="rk-name"><span class="n">' + esc(r.name) + '</span>' +
+'<span class="num c">' + esc(r.code) + "</span></span>" +
+'<span class="num rk-price">' + esc(r.trade) + "</span>" +
+'<span class="num rk-chg" style="color:' + color + '">' + fmtSigned(pct) + "%</span>" +
+'<span class="num rk-amt">' + amountYi.toFixed(2) + "</span></div>";
+}).join("");
+}).catch(function () { /* 保留上次成功数据 */});
+}
+
+var flashFetchedAt = 0;
+function flashTimeLabel(ts) {
+var d = new Date(ts), now = new Date();
+function p(n) { return String(n).padStart(2, "0");}
+var hm = p(d.getHours()) + ":" + p(d.getMinutes());
+return d.toDateString() === now.toDateString()? hm: (d.getMonth() + 1) + "月" + d.getDate() + "日 " + hm;
+}
+function renderFlash(items) {
+if (!items.length) return;
+flashFetchedAt = Date.now();
+$("flash-time").innerHTML = '更新于 <span class="num">' + clockTime(flashFetchedAt) + "</span> · 每分钟自动刷新";
+$("flash-body").innerHTML = items.map(function (item) {
+var inner = '<span class="num flash-time">' + flashTimeLabel(item.ts) + "</span>" +
+'<span class="flash-body"><span class="flash-title">' + esc(item.title) + "</span>" +
+(item.digest? '<span class="flash-digest">' + esc(item.digest) + "</span>": "") + "</span>";
+return item.url
+? '<a class="flash-row" href="' + esc(item.url) + '" target="_blank" rel="noreferrer" aria-label="' +
+esc(item.title) + "（在新窗口打开原文）\">" + inner + "</a>"
+: '<div class="flash-row">' + inner + "</div>";
+}).join("");
+}
+function loadFlashEastmoney() {
+return proxiedText("https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_50_1_.html", 12000)
+.then(function (text) {
+var start = text.indexOf("{"), end = text.lastIndexOf("}");
+if (start < 0 || end <= start) throw new Error("bad");
+var json = JSON.parse(text.slice(start, end + 1));
+var list = json.LivesList || [];
+var items = list.map(function (it) {
+var digest = stripTags(it.digest || "");
+if (it.title && digest.indexOf("") === 0) {
+digest = digest.slice(it.title.length + 2).trim();
+}
+var ts = it.showtime? Date.parse(String(it.showtime).replace(" ", "T") + "+08:00"): NaN;
+return {
+title: it.title || "", digest: digest,
+url: it.url_w || it.url_m || "", ts: isFinite(ts)? ts: Date.now()
+};
+}).filter(function (i) { return i.title;});
+if (!items.length) throw new Error("empty");
+return items.slice(0, 50);
+});
+}
+function loadFlashJin10() {
+return proxiedText("https://www.jin10.com/flash_newest.js", 12000)
+.then(function (text) {
+var start = text.indexOf("["), end = text.lastIndexOf("]");
+if (start < 0 || end <= start) throw new Error("bad");
+var arr = JSON.parse(text.slice(start, end + 1));
+var items = arr.map(function (it) {
+var data = it.data || it;
+var title = stripTags(data.title || data.content || "");
+var digest = data.title && data.content && data.content!== data.title? stripTags(data.content): "";
+var ts = it.time? Date.parse(String(it.time).replace(" ", "T") + "+08:00"): NaN;
+return {
+title: title, digest: digest,
+url: it.id? "https://flash.jin10.com/detail/" + it.id: "",
+ts: isFinite(ts)? ts: Date.now()
+};
+}).filter(function (i) { return i.title;});
+if (!items.length) throw new Error("empty");
+return items.slice(0, 50);
+});
+}
+function loadFlash() {
+return loadFlashEastmoney()
+.catch(function () { return loadFlashJin10();})
+.then(renderFlash)
+.catch(function () { /* 保留上次成功数据 */});
+}
+
+function startDomestic() {
+renderCnIndices();
+loadTencent();
+loadRank();
+setInterval(loadRank, 20000);
+loadFlash();
+setInterval(loadFlash, 60000);
+}
+</script>
+</body>
+</html>
